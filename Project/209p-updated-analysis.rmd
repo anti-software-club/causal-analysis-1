@@ -1,0 +1,279 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(VIM)
+library(stats)
+library(labelled) # Used to remove value labels
+library(mice) # Used to impute data
+```
+
+```{r}
+## Abridged dataset with relevant columns
+# abdata <- data[c('maeduc', 'paeduc', 'educ', 'paocc10', 'sibs', 'incom16', 'family16', 'race', 'sex', 'cohort')]
+abdata <- read.csv('filtered_data.csv')
+abdata$mobility <- ifelse(abdata$maeduc < abdata$paeduc, abdata$educ - abdata$paeduc, abdata$educ - abdata$maeduc)
+abdata$pared <- ifelse(abdata$maeduc < abdata$paeduc, abdata$paeduc, abdata$maeduc) ## Higher educational attainment is number of years of higher attaining parent
+abdata$race <- ifelse(abdata$race == 1, 0, 1) ## Set race to be White as 0, black or other POC as 1
+abdata$attain <- ifelse(abdata$educ >= 13, 1, 0)
+non_impute <- na.omit(abdata) ## Used for linear analysis
+
+imputed <- read.csv("imputed_data.csv") ## Used for causal analysis
+imputed$mobility <- ifelse(imputed$maeduc < imputed$paeduc, imputed$educ - imputed$paeduc, imputed$educ - imputed$maeduc)
+imputed$pared <- ifelse(imputed$maeduc < imputed$paeduc, imputed$paeduc, imputed$maeduc) ## Higher educational attainment is number of years of higher attaining parent
+imputed$race <- ifelse(imputed$race == 1, 0, 1) ## Set race to be White as 0, black or other POC as 1
+imputed$attain <- ifelse(imputed$educ >= 13, 1, 0)
+```
+
+```{r}
+## Form terciles for parental education, ** FOR JUST NON-IMPUTED DATA **
+low_thresh <- quantile(non_impute$pared, 0.33)
+high_thresh <- quantile(non_impute$pared, 0.66)
+
+low_dat_non <- subset(non_impute, pared < low_thresh)
+med_dat_non <- subset(non_impute, pared >= low_thresh & pared <= high_thresh)
+high_dat_non <- subset(non_impute, pared > high_thresh)
+
+## Get sizes of the corresponding datasets
+nrow(low_dat_non)
+nrow(med_dat_non)
+nrow(high_dat_non)
+
+## Form terciles for parental education, ** FOR JUST IMPUTED DATA **
+low_thresh <- quantile(imputed$pared, 0.33)
+high_thresh <- quantile(imputed$pared, 0.66)
+
+low_dat <- subset(imputed, pared < low_thresh)
+med_dat <- subset(imputed, pared >= low_thresh & pared <= high_thresh)
+high_dat <- subset(imputed, pared > high_thresh)
+
+## Get sizes of the corresponding datasets
+nrow(low_dat)
+nrow(med_dat)
+nrow(high_dat)
+```
+
+```{r}
+## Form cohorts
+cohort1940 = subset(imputed, cohort >= 1940 & cohort < 1948)
+cohort1948 = subset(imputed, cohort >= 1948 & cohort < 1956)
+cohort1956 = subset(imputed, cohort >= 1956 & cohort < 1964)
+cohort1964 = subset(imputed, cohort >= 1964 & cohort < 1972)
+cohort1972 = subset(imputed, cohort >= 1972 & cohort < 1980)
+cohort1980 = subset(imputed, cohort >= 1980 & cohort < 1988)
+cohort1988 = subset(imputed, cohort >= 1988)
+
+## Sizes of each cohort
+nrow(cohort1940)
+nrow(cohort1948)
+nrow(cohort1956)
+nrow(cohort1964)
+nrow(cohort1972)
+nrow(cohort1980)
+nrow(cohort1988)
+```
+
+\newpage
+
+```{r}
+## Linear Analysis - replicate Table 3 here and Appendix Tables 1 and 2
+
+## Models to replicate Table 3 here
+## Full Model 1
+total_model1 <- lm(mobility ~ race + sex + race:sex, data = non_impute)
+summary(total_model1)
+
+## Full Model 2
+total_model2 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = non_impute)
+summary(total_model2)
+
+## Full Model 3
+total_model3 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), data = non_impute)
+summary(total_model3)
+
+## Full Model 4
+total_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2) + pared:cohort + pared:I(cohort^2) + pared:race + pared:race:cohort + pared:race:I(cohort^2) + pared:sex + pared:sex:cohort + pared:sex:I(cohort^2) + pared:race:sex + pared:race:sex:cohort + pared:race:sex:I(cohort^2), data = non_impute)
+summary(total_model4)
+
+## Over the terciles, replicate appendix tables 1 and 2 using model 3
+
+## Linear Regression Models for Attainment Appendix 1 Re-Analysis
+low_model3 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), data = low_dat_non)
+summary(low_model3)
+
+med_model3 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), data = med_dat_non)
+summary(med_model3)
+
+high_model3 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), data = high_dat_non)
+summary(high_model3)
+
+## Logistic Regression Models for Attainment (Appendix 2 Re-Analysis)
+low_logmodel3 <- glm(attain ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), family = binomial, data = low_dat_non)
+summary(low_logmodel3)
+
+med_logmodel3 <- glm(attain ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), family = binomial, data = med_dat_non)
+summary(med_logmodel3)
+
+high_logmodel3 <- glm(attain ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16 + cohort + I(cohort^2) + race:cohort + race:I(cohort^2) + sex:cohort + sex:I(cohort^2) + race:sex:cohort + race:sex:I(cohort^2), family = binomial, data = high_dat_non)
+summary(high_logmodel3)
+```
+
+\newpage
+
+```{r}
+## Causal Analysis
+
+## Full Model 1 and 2 for Low Tercile
+low_model1 <- lm(mobility ~ race + sex + race:sex, data = low_dat)
+low_race1 = as.numeric(coefficients((low_model1))[2])
+low_race1err = summary(low_model1)$coefficients["race","Std. Error"]
+low_race1
+low_race1err
+summary(low_model1)
+
+low_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = low_dat)
+low_race4 = as.numeric(coefficients((low_model4))[2])
+low_race4err = summary(low_model4)$coefficients["race","Std. Error"]
+low_race4
+low_race4err
+summary(low_model4)
+
+## Full Model 1 and 2 for Medium Tercile
+med_model1 <- lm(mobility ~ race + sex + race:sex, data = med_dat)
+med_race1 = as.numeric(coefficients((med_model1))[2])
+med_race1err = summary(med_model1)$coefficients["race","Std. Error"]
+med_race1
+med_race1err
+summary(med_model1)
+
+med_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = med_dat)
+med_race4 = as.numeric(coefficients((med_model4))[2])
+med_race4err = summary(med_model4)$coefficients["race","Std. Error"]
+med_race4
+med_race4err
+summary(med_model4)
+
+## Full Model 1 and 2 for High Tercile
+high_model1 <- lm(mobility ~ race + sex + race:sex, data = high_dat)
+high_race1 = as.numeric(coefficients((high_model1))[2])
+high_race1err = summary(high_model1)$coefficients["race","Std. Error"]
+high_race1
+high_race1err
+summary(high_model1)
+
+high_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = high_dat)
+high_race4 = as.numeric(coefficients((high_model4))[2])
+high_race4err = summary(high_model4)$coefficients["race","Std. Error"]
+high_race4
+high_race4err
+summary(high_model4)
+
+## Full Model 1 and 2 for Each Cohort
+
+## 1940
+co1940_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1940)
+co1940_race1 = as.numeric(coefficients((co1940_model1))[2])
+co1940_race1err = summary(co1940_model1)$coefficients["race","Std. Error"]
+co1940_race1
+co1940_race1err
+summary(co1940_model1)
+
+co1940_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1940)
+co1940_race4 = as.numeric(coefficients((co1940_model4))[2])
+co1940_race4err = summary(co1940_model4)$coefficients["race","Std. Error"]
+co1940_race4
+co1940_race4err
+summary(co1940_model4)
+
+## 1948
+co1948_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1948)
+co1948_race1 = as.numeric(coefficients((co1948_model1))[2])
+co1948_race1err = summary(co1948_model1)$coefficients["race","Std. Error"]
+co1948_race1
+co1948_race1err
+summary(co1948_model1)
+
+co1948_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1948)
+co1948_race4 = as.numeric(coefficients((co1948_model4))[2])
+co1948_race4err = summary(co1948_model4)$coefficients["race","Std. Error"]
+co1948_race4
+co1948_race4err
+summary(co1948_model4)
+
+## 1956
+co1956_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1956)
+co1956_race1 = as.numeric(coefficients((co1956_model1))[2])
+co1956_race1err = summary(co1956_model1)$coefficients["race","Std. Error"]
+co1956_race1
+co1956_race1err
+summary(co1956_model1)
+
+co1956_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1956)
+co1956_race4 = as.numeric(coefficients((co1956_model4))[2])
+co1956_race4err = summary(co1956_model4)$coefficients["race","Std. Error"]
+co1956_race4
+co1956_race4err
+summary(co1956_model4)
+
+## 1964
+co1964_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1964)
+co1964_race1 = as.numeric(coefficients((co1964_model1))[2])
+co1964_race1err = summary(co1964_model1)$coefficients["race","Std. Error"]
+co1964_race1
+co1964_race1err
+summary(co1964_model1)
+
+co1964_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1964)
+co1964_race4 = as.numeric(coefficients((co1964_model4))[2])
+co1964_race4err = summary(co1964_model4)$coefficients["race","Std. Error"]
+co1964_race4
+co1964_race4err
+summary(co1964_model4)
+
+## 1972
+co1972_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1972)
+co1972_race1 = as.numeric(coefficients((co1972_model1))[2])
+co1972_race1err = summary(co1972_model1)$coefficients["race","Std. Error"]
+co1972_race1
+co1972_race1err
+summary(co1972_model1)
+
+co1972_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1972)
+co1972_race4 = as.numeric(coefficients((co1972_model4))[2])
+co1972_race4err = summary(co1972_model4)$coefficients["race","Std. Error"]
+co1972_race4
+co1972_race4err
+summary(co1972_model4)
+
+## 1980
+co1980_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1980)
+co1980_race1 = as.numeric(coefficients((co1980_model1))[2])
+co1980_race1err = summary(co1980_model1)$coefficients["race","Std. Error"]
+co1980_race1
+co1980_race1err
+summary(co1980_model1)
+
+co1980_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1980)
+co1980_race4 = as.numeric(coefficients((co1980_model4))[2])
+co1980_race4err = summary(co1980_model4)$coefficients["race","Std. Error"]
+co1980_race4
+co1980_race4err
+summary(co1980_model4)
+
+## 1988
+co1988_model1 <- lm(mobility ~ race + sex + race:sex, data = cohort1988)
+co1988_race1 = as.numeric(coefficients((co1988_model1))[2])
+co1988_race1err = summary(co1988_model1)$coefficients["race","Std. Error"]
+co1988_race1
+co1988_race1err
+summary(co1988_model1)
+
+co1988_model4 <- lm(mobility ~ race + sex + race:sex + pared + paocc10 + family16 + sibs + incom16, data = cohort1988)
+co1988_race4 = as.numeric(coefficients((co1988_model4))[2])
+co1988_race4err = summary(co1988_model4)$coefficients["race","Std. Error"]
+co1988_race4
+co1988_race4err
+summary(co1988_model4)
+```
